@@ -84,7 +84,9 @@ class Game:
         self.dice_roll: int = 1
         self.phase: str = PHASE_SELECT_SHIP
 
-        self.valid_destinations: List[Tuple[int, int]] = []
+        # Destination tiles currently highlighted for movement selection.
+        # value = shortest steps from the active ship to that tile (0..dice_roll).
+        self.valid_destinations: Dict[Tuple[int, int], int] = {}
         self.in_range_attack_targets: List[Ship] = []
         self.in_range_heal_targets: List[Ship] = []
         self.pending_human_action = PendingHumanAction()
@@ -101,7 +103,7 @@ class Game:
         self.dice_roll = self.turn_manager.roll_dice()
         self.turn_manager.global_turn_index = 0
 
-        self.valid_destinations = []
+        self.valid_destinations = {}
         self.in_range_attack_targets = []
         self.in_range_heal_targets = []
         self.pending_human_action = PendingHumanAction()
@@ -182,7 +184,7 @@ class Game:
     def _advance_to_next_owner(self) -> None:
         self.active_owner_id = (self.active_owner_id + 1) % self._owner_turn_cycle_count()
         self.active_ship_id = None
-        self.valid_destinations = []
+        self.valid_destinations = {}
         self.in_range_attack_targets = []
         self.in_range_heal_targets = []
         self.pending_human_action = PendingHumanAction()
@@ -243,28 +245,9 @@ class Game:
         ship = self._get_ship(self.active_ship_id) if self.active_ship_id is not None else None
         if ship is None:
             return False
-        occupancy = self.grid_manager.build_occupancy(self.ships)
-        # Determine direction from current to dest (only straight lines allowed).
-        dx = dest[0] - ship.x
-        dy = dest[1] - ship.y
-        if dx == 0 and dy == 0:
-            # If we allow "no move", it must be <= dice_roll, but we keep it strict here.
-            return False
-        # Normalize to unit direction.
-        dir_x = 0 if dx == 0 else (1 if dx > 0 else -1)
-        dir_y = 0 if dy == 0 else (1 if dy > 0 else -1)
-        steps = max(abs(dx), abs(dy))
-        if steps != self.dice_roll:
-            return False
-        # Straight line must match direction.
-        if self.dice_roll == 0:
-            return False
-        if dx != dir_x * steps or dy != dir_y * steps:
-            return False
 
-        # Validate intermediate occupancy along the straight move.
-        validated = self.grid_manager.validate_straight_move(ship, (dir_x, dir_y), self.dice_roll, occupancy)
-        if validated is None or validated != dest:
+        # Movement rule: destination must be reachable within <= dice_roll steps.
+        if dest not in self.valid_destinations:
             return False
 
         # Apply movement
@@ -275,17 +258,12 @@ class Game:
 
         return True
 
-    def _human_select_destinations_for_active_ship(self) -> List[Tuple[int, int]]:
+    def _human_select_destinations_for_active_ship(self) -> Dict[Tuple[int, int], int]:
         ship = self._get_ship(self.active_ship_id) if self.active_ship_id is not None else None
         if ship is None:
-            return []
+            return {}
         occupancy = self.grid_manager.build_occupancy(self.ships)
-        destinations: List[Tuple[int, int]] = []
-        for dir_xy in DIRS_8:
-            dest = self.grid_manager.validate_straight_move(ship, dir_xy, self.dice_roll, occupancy)
-            if dest is not None:
-                destinations.append(dest)
-        return destinations
+        return self.grid_manager.reachable_tiles(ship, occupancy, max_steps=self.dice_roll)
 
     def _handle_human_input(self, event: pygame.event.Event) -> None:
         if event.type == pygame.KEYDOWN:
@@ -366,23 +344,14 @@ class Game:
             self._end_turn()
             return
 
-        # Validate move (should already be valid from AI).
+        # Validate move (should already be valid from AI, but verify reachability).
         occupancy = self.grid_manager.build_occupancy(self.ships)
         dest = choice.moved_to
-        # Determine steps and direction.
-        dx = dest[0] - ship.x
-        dy = dest[1] - ship.y
-        if dx == 0 and dy == 0:
-            # allow stay only if no valid moves exists; keep strict: no movement => still end turn
-            pass
-        else:
-            dir_x = 0 if dx == 0 else (1 if dx > 0 else -1)
-            dir_y = 0 if dy == 0 else (1 if dy > 0 else -1)
-            validated = self.grid_manager.validate_straight_move(ship, (dir_x, dir_y), dice_roll, occupancy)
-            if validated is None:
-                self._end_turn()
-                return
-            ship.x, ship.y = validated
+        reachable = self.grid_manager.reachable_tiles(ship, occupancy, max_steps=dice_roll)
+        if dest not in reachable:
+            self._end_turn()
+            return
+        ship.x, ship.y = dest
 
         # Collect pickup
         self.pickups.try_collect(ship, self.pickup_list)
@@ -405,7 +374,7 @@ class Game:
         # Roll dice for each turn.
         self.dice_roll = self.turn_manager.roll_dice()
         self.active_ship_id = None
-        self.valid_destinations = []
+        self.valid_destinations = {}
         self.in_range_attack_targets = []
         self.in_range_heal_targets = []
         self.phase = PHASE_SELECT_SHIP
@@ -459,7 +428,7 @@ class Game:
             title = "Space Grid TBS"
             self.screen.blit(title_font.render(title, True, (230, 235, 255)), (60, 60))
 
-            desc_font = pygame.font.SysFont(None, 22)
+            desc_font = pygame.font.SysFont(None, 28)
             desc = "Select AI opponents (1-3). You are Player 0."
             self.screen.blit(desc_font.render(desc, True, (220, 230, 255)), (60, 120))
 
@@ -485,9 +454,14 @@ class Game:
         self.ui.draw_ships(
             self.ships,
             active_ship_id=self.active_ship_id,
-            valid_destinations=self.valid_destinations if self.phase == PHASE_SELECT_DEST else (),
+            valid_destinations=[
+                (x, y, dist) for (x, y), dist in self.valid_destinations.items()
+            ]
+            if self.phase == PHASE_SELECT_DEST
+            else (),
             in_action_targets=self.in_range_attack_targets if self.phase == PHASE_ACTION else (),
             in_action_friendly_targets=self.in_range_heal_targets if self.phase == PHASE_ACTION else (),
+            movement_max_steps=self.dice_roll if self.phase == PHASE_SELECT_DEST else None,
         )
 
         alive_counts = self._alive_counts()

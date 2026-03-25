@@ -3,9 +3,9 @@ from __future__ import annotations
 # -----------------------------
 # Board / rendering
 # -----------------------------
-GRID_SIZE = 50
-TILE_SIZE = 10
-HUD_WIDTH = 320
+GRID_SIZE = 25
+TILE_SIZE = 20
+HUD_WIDTH = 420
 SCREEN_WIDTH = GRID_SIZE * TILE_SIZE + HUD_WIDTH
 SCREEN_HEIGHT = GRID_SIZE * TILE_SIZE
 FPS = 60

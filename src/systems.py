@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 import random
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -69,6 +70,53 @@ class GridManager:
     ) -> Tuple[int, int]:
         dx, dy = dir_xy
         return x + dx * steps, y + dy * steps
+
+    def reachable_tiles(
+        self,
+        ship: Ship,
+        occupancy: Dict[Tuple[int, int], int],
+        *,
+        max_steps: int,
+    ) -> Dict[Tuple[int, int], int]:
+        """
+        8-direction movement up to `max_steps` (dice value).
+        Ships cannot move through/onto other occupied tiles.
+
+        Returns a map of reachable tile -> shortest step distance from `ship`.
+        Includes the starting tile with distance 0.
+        """
+        if max_steps < 0:
+            return {}
+
+        start = (ship.x, ship.y)
+        dist: Dict[Tuple[int, int], int] = {start: 0}
+        q: deque[Tuple[int, int]] = deque([start])
+
+        while q:
+            x, y = q.popleft()
+            d = dist[(x, y)]
+            if d >= max_steps:
+                continue
+
+            for dx, dy in DIRS_8:
+                nx = x + dx
+                ny = y + dy
+                if not self.in_bounds(nx, ny):
+                    continue
+
+                occ_ship_id = occupancy.get((nx, ny))
+                if occ_ship_id is not None and occ_ship_id != ship.id:
+                    continue
+
+                nd = d + 1
+                key = (nx, ny)
+                if key in dist:
+                    continue
+
+                dist[key] = nd
+                q.append(key)
+
+        return dist
 
     def validate_straight_move(
         self,
@@ -329,14 +377,10 @@ class AIController:
         best: Optional[AIChoice] = None
         best_score = -1e18
 
-        # Enumerate candidates: move straight in one of 8 directions.
+        # Enumerate candidates: move to any BFS-reachable tile <= dice_roll.
         for ship in my_ships:
-            for dir_xy in DIRS_8:
-                dest = grid_manager.validate_straight_move(ship, dir_xy, dice_roll, occupancy)
-                if dest is None:
-                    continue
-
-                sx, sy = dest
+            reachable = grid_manager.reachable_tiles(ship, occupancy, max_steps=dice_roll)
+            for (sx, sy), steps in reachable.items():
 
                 # Predict "in range" after moving.
                 enemies_in_range = [
@@ -392,7 +436,8 @@ class AIController:
                     storm_score = storm_weight * (-outside)
 
                 # Combine: prioritize attack > heal > positioning
-                move_base = pickup_score + storm_score
+                # Slight preference for using more of the dice move.
+                move_base = pickup_score + storm_score + 0.35 * steps
                 action_score = move_base
                 action_type = "none"
                 target_id = None
@@ -422,9 +467,13 @@ class AIController:
 
                 if action_score > best_score:
                     best_score = action_score
+                    dx = sx - ship.x
+                    dy = sy - ship.y
+                    dir_x = 0 if dx == 0 else (1 if dx > 0 else -1)
+                    dir_y = 0 if dy == 0 else (1 if dy > 0 else -1)
                     best = AIChoice(
                         ship_id=ship.id,
-                        move_dir=dir_xy,
+                        move_dir=(dir_x, dir_y),
                         moved_to=(sx, sy),
                         action_type=action_type,
                         target_id=target_id,
