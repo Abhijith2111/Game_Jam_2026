@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 import pygame
 
@@ -93,6 +93,10 @@ class Game:
 
         self.ai: Optional[AIController] = None
 
+        # Human-only multi-ship selection state (AI still moves one ship per turn).
+        self.human_selected_ship_ids: List[int] = []
+        self.human_processed_ship_ids: Set[int] = set()
+
         self._running = True
 
     def reset_game(self) -> None:
@@ -107,6 +111,9 @@ class Game:
         self.in_range_attack_targets = []
         self.in_range_heal_targets = []
         self.pending_human_action = PendingHumanAction()
+
+        self.human_selected_ship_ids = []
+        self.human_processed_ship_ids = set()
 
         self.ai = AIController(num_opponents=self.num_opponents)
 
@@ -192,6 +199,10 @@ class Game:
         # Each owner turn begins with exactly one dice roll.
         self.dice_roll = self.turn_manager.roll_dice()
 
+        # Clear human multi-ship state for the next owner.
+        self.human_selected_ship_ids = []
+        self.human_processed_ship_ids = set()
+
         self._decrement_cooldowns_for_owner(self.active_owner_id)
 
     def _end_turn(self) -> None:
@@ -245,6 +256,8 @@ class Game:
         ship = self._get_ship(self.active_ship_id) if self.active_ship_id is not None else None
         if ship is None:
             return False
+        if ship.id in self.human_processed_ship_ids:
+            return False
 
         # Movement rule: destination must be reachable within <= dice_roll steps.
         if dest not in self.valid_destinations:
@@ -265,47 +278,105 @@ class Game:
         occupancy = self.grid_manager.build_occupancy(self.ships)
         return self.grid_manager.reachable_tiles(ship, occupancy, max_steps=self.dice_roll)
 
+    def _human_can_process_ship(self, ship: Ship) -> bool:
+        # Processed ships can't be moved/acted again in this owner turn.
+        return ship.hp > 0 and ship.id not in self.human_processed_ship_ids and ship.owner_id == self.active_owner_id
+
+    def _human_queue_ship(self, ship: Ship) -> None:
+        if not self._human_can_process_ship(ship):
+            return
+        if ship.id not in self.human_selected_ship_ids:
+            self.human_selected_ship_ids.append(ship.id)
+        self.active_ship_id = ship.id
+        self.valid_destinations = self._human_select_destinations_for_active_ship()
+        self.phase = PHASE_SELECT_DEST
+
+    def _human_mark_active_processed_and_advance(self) -> None:
+        if self.active_ship_id is not None:
+            self.human_processed_ship_ids.add(self.active_ship_id)
+
+        self.in_range_attack_targets = []
+        self.in_range_heal_targets = []
+
+        # Move to the most recently queued ship that hasn't been processed yet.
+        next_ship_id = None
+        for sid in reversed(self.human_selected_ship_ids):
+            if sid not in self.human_processed_ship_ids:
+                next_ship_id = sid
+                break
+
+        if next_ship_id is None:
+            # Nothing left to process in this queue.
+            self.active_ship_id = None
+            self.valid_destinations = {}
+            self._end_turn()
+            return
+
+        self.active_ship_id = next_ship_id
+        self.valid_destinations = self._human_select_destinations_for_active_ship()
+        self.phase = PHASE_SELECT_DEST
+
+    def _human_skip_current_action(self) -> None:
+        # Skip attack/heal for the active ship, then continue queue processing.
+        self._human_mark_active_processed_and_advance()
+
     def _handle_human_input(self, event: pygame.event.Event) -> None:
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                # End turn (only allowed if we're in action phase and either no action chosen or action already done).
-                if self.phase == PHASE_ACTION:
-                    self._end_turn()
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+            if self.phase == PHASE_ACTION:
+                self._human_skip_current_action()
+            else:
+                # End the owner turn from selection mode (skip remaining queued ships).
+                self._end_turn()
+            return
+
         if event.type != pygame.MOUSEBUTTONDOWN:
             return
+
         mx, my = event.pos
         if mx >= GRID_SIZE * TILE_SIZE:
             return
         grid_x = mx // TILE_SIZE
         grid_y = my // TILE_SIZE
 
-        if self.phase == PHASE_SELECT_SHIP:
-            # Click one of your own ships
-            for s in self._get_ships_of_owner(self.active_owner_id):
-                if s.x == grid_x and s.y == grid_y:
-                    self.active_ship_id = s.id
-                    self.valid_destinations = self._human_select_destinations_for_active_ship()
-                    self.phase = PHASE_SELECT_DEST
-                    return
-        elif self.phase == PHASE_SELECT_DEST:
-            # Click a valid destination tile
-            if (grid_x, grid_y) in self.valid_destinations:
-                moved = self._try_move_active_ship((grid_x, grid_y))
-                if moved:
+        clicked_ship = None
+        for s in self._get_ships_of_owner(self.active_owner_id):
+            if s.x == grid_x and s.y == grid_y:
+                clicked_ship = s
+                break
+
+        if self.phase in (PHASE_SELECT_SHIP, PHASE_SELECT_DEST):
+            # Tap ships to queue them; destination clicks move the active queued ship.
+            if clicked_ship is not None:
+                self._human_queue_ship(clicked_ship)
+                return
+
+            if self.phase == PHASE_SELECT_DEST and self.active_ship_id is not None:
+                # Move the active queued ship to a BFS-reachable destination.
+                if (grid_x, grid_y) in self.valid_destinations:
+                    moved = self._try_move_active_ship((grid_x, grid_y))
+                    if not moved:
+                        return
+
                     # After moving: compute action targets for this active ship.
                     ship = self._get_ship(self.active_ship_id)
                     if ship is not None:
                         enemies, friends = self._compute_human_action_targets(ship)
                         self.in_range_attack_targets = enemies
                         self.in_range_heal_targets = [
-                            f for f in friends if ship.ship_type == SHIP_HEALER and f.hp < f.max_hp and ship.heal_cooldown_remaining <= 0
+                            f
+                            for f in friends
+                            if ship.ship_type == SHIP_HEALER
+                            and f.hp < f.max_hp
+                            and ship.heal_cooldown_remaining <= 0
                         ]
                     self.phase = PHASE_ACTION
-                    return
+                return
+
         elif self.phase == PHASE_ACTION:
             ship = self._get_ship(self.active_ship_id)
             if ship is None:
                 return
+
             # Try attack or heal based on what is highlighted.
             clicked_target = None
             for t in self.in_range_attack_targets + self.in_range_heal_targets:
@@ -318,11 +389,11 @@ class Game:
             if clicked_target in self.in_range_attack_targets:
                 if self._ship_can_attack(ship):
                     self.combat.perform_attack(ship, clicked_target)
-                    self._end_turn()
+                    self._human_mark_active_processed_and_advance()
             elif clicked_target in self.in_range_heal_targets:
                 # Heal action
                 self.combat.perform_heal(ship, clicked_target)
-                self._end_turn()
+                self._human_mark_active_processed_and_advance()
 
     def _ai_take_turn(self) -> None:
         assert self.ai is not None
@@ -454,6 +525,13 @@ class Game:
         self.ui.draw_ships(
             self.ships,
             active_ship_id=self.active_ship_id,
+            selected_ship_ids=[
+                sid
+                for sid in self.human_selected_ship_ids
+                if sid not in self.human_processed_ship_ids
+            ]
+            if self.active_owner_id == 0
+            else (),
             valid_destinations=[
                 (x, y, dist) for (x, y), dist in self.valid_destinations.items()
             ]

@@ -119,6 +119,7 @@ class UI:
         ships: Sequence[Ship],
         *,
         active_ship_id: Optional[int] = None,
+        selected_ship_ids: Sequence[int] = (),
         valid_destinations: Sequence[Tuple[int, int, int]] = (),
         movement_max_steps: Optional[int] = None,
         in_action_targets: Sequence[Ship] = (),
@@ -210,6 +211,10 @@ class UI:
                 )
                 # Engine glow
                 pygame.draw.circle(self.screen, (255, 240, 180), (cx, py + TILE_SIZE - 6), 2)
+
+            is_selected = s.id in set(selected_ship_ids)
+            if is_selected and (active_ship_id is None or s.id != active_ship_id):
+                pygame.draw.rect(self.screen, (150, 100, 255), rect, 2, border_radius=3)
 
             if active_ship_id is not None and s.id == active_ship_id:
                 pygame.draw.rect(self.screen, (255, 220, 60), rect, 2)
@@ -315,11 +320,14 @@ class UI:
         y = hud.height - 120
         self.screen.blit(self.small_font.render("Controls:", True, COLOR_TEXT), (hud_x + 14, y))
         y += 22
-        self.screen.blit(self.small_font.render("Click ship: select", True, COLOR_TEXT), (hud_x + 14, y))
+        self.screen.blit(self.small_font.render("Click ship: add to queue", True, COLOR_TEXT), (hud_x + 14, y))
         y += 20
         self.screen.blit(self.small_font.render("Click tile: move", True, COLOR_TEXT), (hud_x + 14, y))
         y += 20
         self.screen.blit(self.small_font.render("Click target: attack/heal", True, COLOR_TEXT), (hud_x + 14, y))
         y += 20
-        self.screen.blit(self.small_font.render("Space: end turn", True, COLOR_TEXT), (hud_x + 14, y))
+        if current_phase == "action_choice":
+            self.screen.blit(self.small_font.render("Space: skip action", True, COLOR_TEXT), (hud_x + 14, y))
+        else:
+            self.screen.blit(self.small_font.render("Space: end turn (skip queued)", True, COLOR_TEXT), (hud_x + 14, y))
 
