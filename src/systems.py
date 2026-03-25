@@ -148,6 +148,35 @@ class GridManager:
                 return None
         return (dest_x, dest_y)
 
+    def directional_destinations(
+        self,
+        ship: Ship,
+        occupancy: Dict[Tuple[int, int], int],
+        *,
+        max_steps: int,
+    ) -> Dict[Tuple[int, int], int]:
+        """
+        Straight-line movement up to `max_steps` in a single chosen direction (8-dir).
+
+        Returns a map: destination tile -> step distance (0..max_steps).
+        The starting tile is included with distance 0.
+        """
+        start = (ship.x, ship.y)
+        if max_steps < 0:
+            return {start: 0}
+
+        dist: Dict[Tuple[int, int], int] = {start: 0}
+
+        for dir_xy in DIRS_8:
+            for steps in range(1, max_steps + 1):
+                dest = self.validate_straight_move(ship, dir_xy, steps, occupancy)
+                if dest is None:
+                    # Further steps in this direction can't become valid again.
+                    break
+                dist[dest] = steps
+
+        return dist
+
     def ships_in_cheb_range(
         self,
         src: Ship,
@@ -377,10 +406,10 @@ class AIController:
         best: Optional[AIChoice] = None
         best_score = -1e18
 
-        # Enumerate candidates: move to any BFS-reachable tile <= dice_roll.
+        # Enumerate candidates: straight-line destinations <= dice_roll.
         for ship in my_ships:
-            reachable = grid_manager.reachable_tiles(ship, occupancy, max_steps=dice_roll)
-            for (sx, sy), steps in reachable.items():
+            directional = grid_manager.directional_destinations(ship, occupancy, max_steps=dice_roll)
+            for (sx, sy), steps in directional.items():
 
                 # Predict "in range" after moving.
                 enemies_in_range = [

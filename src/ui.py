@@ -320,14 +320,14 @@ class UI:
         y = hud.height - 120
         self.screen.blit(self.small_font.render("Controls:", True, COLOR_TEXT), (hud_x + 14, y))
         y += 22
-        self.screen.blit(self.small_font.render("Click ship: add to queue", True, COLOR_TEXT), (hud_x + 14, y))
+        self.screen.blit(self.small_font.render("Click ship: select ship", True, COLOR_TEXT), (hud_x + 14, y))
         y += 20
         self.screen.blit(self.small_font.render("Click tile: move", True, COLOR_TEXT), (hud_x + 14, y))
         y += 20
         self.screen.blit(self.small_font.render("Click target: attack/heal", True, COLOR_TEXT), (hud_x + 14, y))
         y += 20
         if current_phase == "action_choice":
-            self.screen.blit(self.small_font.render("Space: skip action", True, COLOR_TEXT), (hud_x + 14, y))
+            self.screen.blit(self.small_font.render("Space: skip action and end turn", True, COLOR_TEXT), (hud_x + 14, y))
         else:
-            self.screen.blit(self.small_font.render("Space: end turn (skip queued)", True, COLOR_TEXT), (hud_x + 14, y))
+            self.screen.blit(self.small_font.render("Space: end turn", True, COLOR_TEXT), (hud_x + 14, y))
 
