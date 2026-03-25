@@ -22,6 +22,8 @@ from src.config import (
     SAFE_ZONE_SHRINK_AMOUNT,
     SAFE_ZONE_SHRINK_INTERVAL,
     STORM_START_TURNS,
+    STORM_FIRST_SHRINK_SECONDS,
+    STORM_SUBSEQUENT_SHRINK_SECONDS,
 )
 from src.models import Pickup, Ship
 
@@ -335,23 +337,45 @@ class HazardSystem:
 
         self.max_radius = max(self.cx, self.cy)
 
-    def safe_radius(self, global_turn_index: int) -> int:
+    def safe_radius(self, global_turn_index: int, elapsed_seconds_since_game_start: float) -> int:
+        """
+        Time-based shrinking:
+        - Safe zone stays full-size until the storm becomes active by `global_turn_index >= STORM_START_TURNS`.
+        - After storm is active:
+          - at t >= 5 minutes: shrink once
+          - then every 1 minute: shrink again
+        """
         if global_turn_index < STORM_START_TURNS:
             return self.max_radius
-        shrinks = (global_turn_index - STORM_START_TURNS) // SAFE_ZONE_SHRINK_INTERVAL
-        radius = self.max_radius - shrinks * SAFE_ZONE_SHRINK_AMOUNT
-        return max(SAFE_ZONE_MIN_RADIUS, radius)
 
-    def is_ship_in_safe_zone(self, ship: Ship, global_turn_index: int) -> bool:
-        r = self.safe_radius(global_turn_index)
+        if elapsed_seconds_since_game_start < STORM_FIRST_SHRINK_SECONDS:
+            shrink_events = 0
+        else:
+            shrink_events = 1 + int(
+                (elapsed_seconds_since_game_start - STORM_FIRST_SHRINK_SECONDS)
+                // STORM_SUBSEQUENT_SHRINK_SECONDS
+            )
+
+        radius = self.max_radius - shrink_events * SAFE_ZONE_SHRINK_AMOUNT
+        return max(SAFE_ZONE_MIN_RADIUS, int(radius))
+
+    def is_ship_in_safe_zone(
+        self, ship: Ship, global_turn_index: int, elapsed_seconds_since_game_start: float
+    ) -> bool:
+        r = self.safe_radius(global_turn_index, elapsed_seconds_since_game_start)
         return chebyshev_dist(ship.x, ship.y, self.cx, self.cy) <= r
 
-    def apply_end_turn_damage(self, ships: Sequence[Ship], global_turn_index: int) -> List[int]:
+    def apply_end_turn_damage(
+        self,
+        ships: Sequence[Ship],
+        global_turn_index: int,
+        elapsed_seconds_since_game_start: float,
+    ) -> List[int]:
         killed_ids: List[int] = []
         for s in ships:
             if s.hp <= 0:
                 continue
-            if not self.is_ship_in_safe_zone(s, global_turn_index):
+            if not self.is_ship_in_safe_zone(s, global_turn_index, elapsed_seconds_since_game_start):
                 s.hp -= HAZARD_DAMAGE
                 if s.hp <= 0:
                     killed_ids.append(s.id)
@@ -384,6 +408,7 @@ class AIController:
         pickups: Sequence[Pickup],
         hazard: HazardSystem,
         global_turn_index: int,
+        elapsed_seconds_since_game_start: float,
         dice_roll: int,
     ) -> AIChoice:
         occupancy = grid_manager.build_occupancy(ships)
@@ -396,7 +421,7 @@ class AIController:
         enemy_ships = [s for s in ships if s.owner_id != owner_id and s.hp > 0]
         pickup_tiles = [(p.x, p.y) for p in pickups if p.active]
         storm_active = global_turn_index >= STORM_START_TURNS
-        safe_r = hazard.safe_radius(global_turn_index)
+        safe_r = hazard.safe_radius(global_turn_index, elapsed_seconds_since_game_start)
 
         attack_weight = 55 * self.difficulty
         heal_weight = 35 * self.difficulty

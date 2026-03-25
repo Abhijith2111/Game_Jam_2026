@@ -97,6 +97,8 @@ class Game:
         self.human_selected_ship_ids: List[int] = []
         self.human_processed_ship_ids: Set[int] = set()
 
+        self.game_start_ticks_ms: int = pygame.time.get_ticks()
+
         self._running = True
 
     def reset_game(self) -> None:
@@ -106,6 +108,7 @@ class Game:
         self.active_ship_id = None
         self.dice_roll = self.turn_manager.roll_dice()
         self.turn_manager.global_turn_index = 0
+        self.game_start_ticks_ms = pygame.time.get_ticks()
 
         self.valid_destinations = {}
         self.in_range_attack_targets = []
@@ -127,6 +130,9 @@ class Game:
 
         # Decrement cooldown at start of the first owner's turn
         self._decrement_cooldowns_for_owner(self.active_owner_id)
+
+    def _elapsed_seconds_since_game_start(self) -> float:
+        return (pygame.time.get_ticks() - self.game_start_ticks_ms) / 1000.0
 
     def _spawn_fleets(self) -> None:
         # Ship IDs are global across the entire match.
@@ -208,6 +214,7 @@ class Game:
     def _end_turn(self) -> None:
         # Global turn advances after each player's turn.
         self.turn_manager.advance_global_turn()
+        elapsed_seconds = self._elapsed_seconds_since_game_start()
 
         # Update pickups (respawn after 5 global turns).
         self.pickups.update(
@@ -218,7 +225,11 @@ class Game:
         )
 
         # Apply hazard damage at end of turn.
-        killed = self.hazard.apply_end_turn_damage(self.ships, self.turn_manager.global_turn_index)
+        killed = self.hazard.apply_end_turn_damage(
+            self.ships,
+            self.turn_manager.global_turn_index,
+            elapsed_seconds,
+        )
         # (ships are already hp<=0 so occupancy will update automatically)
 
         # Check win condition
@@ -403,6 +414,7 @@ class Game:
         assert self.ai is not None
         owner_id = self.active_owner_id
         dice_roll = self.dice_roll
+        elapsed_seconds = self._elapsed_seconds_since_game_start()
 
         choice = self.ai.choose_turn(
             owner_id=owner_id,
@@ -411,6 +423,7 @@ class Game:
             pickups=self.pickup_list,
             hazard=self.hazard,
             global_turn_index=self.turn_manager.global_turn_index,
+            elapsed_seconds_since_game_start=elapsed_seconds,
             dice_roll=dice_roll,
         )
 
@@ -518,7 +531,8 @@ class Game:
         # playing / game over
         self.ui.draw_grid()
 
-        safe_r = self.hazard.safe_radius(self.turn_manager.global_turn_index)
+        elapsed_seconds = self._elapsed_seconds_since_game_start()
+        safe_r = self.hazard.safe_radius(self.turn_manager.global_turn_index, elapsed_seconds)
         storm_active = self.turn_manager.global_turn_index >= STORM_START_TURNS
         self.ui.draw_safe_zone(safe_r, storm_active=storm_active)
         self.ui.draw_storm_overlay(storm_active=storm_active)
