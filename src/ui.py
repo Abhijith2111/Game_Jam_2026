@@ -24,6 +24,15 @@ from src.config import (
 from src.models import Ship
 
 
+def _format_match_elapsed(seconds: float) -> str:
+    total = int(max(0.0, seconds))
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    if h > 0:
+        return f"{h:d}:{m:02d}:{s:02d}"
+    return f"{m:d}:{s:02d}"
+
+
 @dataclass(frozen=True)
 class UIButtonHint:
     label: str
@@ -351,6 +360,7 @@ class UI:
         num_opponents: int,
         active_ship: Optional[Ship],
         healing_cooldown_for_active: Optional[int],
+        elapsed_seconds: float,
     ) -> None:
         hud_x = GRID_SIZE * TILE_SIZE
         hud = pygame.Rect(hud_x, 0, HUD_WIDTH, GRID_SIZE * TILE_SIZE)
@@ -367,9 +377,14 @@ class UI:
         self._draw_dice_icon(dice_roll, hud_x + HUD_WIDTH - 70, 58, size=dice_size)
 
         self.screen.blit(self.small_font.render(f"Phase: {current_phase}", True, COLOR_TEXT), (hud_x + 14, 94))
+        time_str = _format_match_elapsed(elapsed_seconds)
+        self.screen.blit(
+            self.small_font.render(f"Time: {time_str}", True, COLOR_TEXT),
+            (hud_x + 14, 120),
+        )
 
         # Alive ships per owner
-        y = 140
+        y = 166
         self.screen.blit(self.small_font.render("Ships alive:", True, COLOR_TEXT), (hud_x + 14, y))
         y += 22
         for pid in range(0, 1 + num_opponents):

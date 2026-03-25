@@ -99,6 +99,7 @@ class Game:
         self.human_processed_ship_ids: Set[int] = set()
 
         self.game_start_ticks_ms: int = pygame.time.get_ticks()
+        self.match_elapsed_seconds_at_end: Optional[float] = None
 
         self._running = True
 
@@ -110,6 +111,7 @@ class Game:
         self.dice_roll = self.turn_manager.roll_dice()
         self.turn_manager.global_turn_index = 0
         self.game_start_ticks_ms = pygame.time.get_ticks()
+        self.match_elapsed_seconds_at_end = None
 
         self.valid_destinations = {}
         self.in_range_attack_targets = []
@@ -236,6 +238,7 @@ class Game:
         # Check win condition
         alive_owner_ids = self._alive_owner_ids()
         if len(alive_owner_ids) <= 1:
+            self.match_elapsed_seconds_at_end = elapsed_seconds
             self.state = PHASE_GAME_OVER
             self.phase = PHASE_GAME_OVER
             return
@@ -594,8 +597,11 @@ class Game:
         # playing / game over
         self.ui.draw_grid()
 
-        elapsed_seconds = self._elapsed_seconds_since_game_start()
-        safe_r = self.hazard.safe_radius(self.turn_manager.global_turn_index, elapsed_seconds)
+        if self.state == PHASE_GAME_OVER and self.match_elapsed_seconds_at_end is not None:
+            display_elapsed = self.match_elapsed_seconds_at_end
+        else:
+            display_elapsed = self._elapsed_seconds_since_game_start()
+        safe_r = self.hazard.safe_radius(self.turn_manager.global_turn_index, display_elapsed)
         storm_active = self.turn_manager.global_turn_index >= STORM_START_TURNS
         self.ui.draw_safe_zone(safe_r, storm_active=storm_active)
         self.ui.draw_storm_overlay(storm_active=storm_active)
@@ -626,6 +632,7 @@ class Game:
             num_opponents=self.num_opponents,
             active_ship=active_ship,
             healing_cooldown_for_active=active_ship.heal_cooldown_remaining if active_ship and active_ship.ship_type == SHIP_HEALER else None,
+            elapsed_seconds=display_elapsed,
         )
 
         if self.state == PHASE_GAME_OVER:
