@@ -24,6 +24,8 @@ from src.config import (
     STORM_START_TURNS,
     STORM_FIRST_SHRINK_SECONDS,
     STORM_SUBSEQUENT_SHRINK_SECONDS,
+    AI_RETREAT_DISTANCE_WEIGHT,
+    AI_RETREAT_HP_THRESHOLD,
 )
 from src.models import Pickup, Ship
 
@@ -449,6 +451,23 @@ class AIController:
                 ]
                 heal_ready = ship.ship_type == SHIP_HEALER and ship.heal_cooldown_remaining <= 0
 
+                # Retreat behavior:
+                # If the ship is low HP and would be in enemy attack range after moving,
+                # prioritize moves that increase distance from enemies.
+                low_hp = ship.hp / ship.max_hp <= AI_RETREAT_HP_THRESHOLD
+                retreat_mode = low_hp and len(enemies_in_range) > 0
+                if retreat_mode:
+                    nearest_enemy_dist = min(
+                        chebyshev_dist(sx, sy, e.x, e.y) for e in enemies_in_range
+                    )
+                    retreat_reward = AI_RETREAT_DISTANCE_WEIGHT * nearest_enemy_dist
+                    attack_weight_local = attack_weight * 0.65
+                    heal_weight_local = heal_weight * 0.65
+                else:
+                    retreat_reward = 0.0
+                    attack_weight_local = attack_weight
+                    heal_weight_local = heal_weight
+
                 # Evaluate best attack option
                 best_attack = None
                 if enemies_in_range:
@@ -457,7 +476,7 @@ class AIController:
                     dmg = ship.damage
                     kill_bonus = 1000 if best_target.hp - dmg <= 0 else 0
                     best_attack = (
-                        attack_weight * dmg + kill_bonus - best_target.hp * 0.1,
+                        attack_weight_local * dmg + kill_bonus - best_target.hp * 0.1,
                         best_target.id,
                     )
 
@@ -470,7 +489,7 @@ class AIController:
                         missing = best_target.max_hp - best_target.hp
                         kill_prevent_bonus = 0
                         best_heal = (
-                            heal_weight * HEAL_AMOUNT + missing * 0.5 + kill_prevent_bonus,
+                            heal_weight_local * HEAL_AMOUNT + missing * 0.5 + kill_prevent_bonus,
                             best_target.id,
                         )
 
@@ -491,7 +510,7 @@ class AIController:
 
                 # Combine: prioritize attack > heal > positioning
                 # Slight preference for using more of the dice move.
-                move_base = pickup_score + storm_score + 0.35 * steps
+                move_base = pickup_score + storm_score + 0.35 * steps + retreat_reward
                 action_score = move_base
                 action_type = "none"
                 target_id = None

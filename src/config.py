@@ -54,6 +54,12 @@ SAFE_ZONE_MIN_RADIUS = 0
 HAZARD_DAMAGE = 10
 
 # -----------------------------
+# AI retreat behavior
+# -----------------------------
+AI_RETREAT_HP_THRESHOLD = 0.25  # retreat when HP% <= 25%
+AI_RETREAT_DISTANCE_WEIGHT = 70  # how strongly AI prefers increasing distance
+
+# -----------------------------
 # Colors (placeholders)
 # -----------------------------
 COLOR_BG = (7, 10, 20)
