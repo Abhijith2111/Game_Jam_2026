@@ -4,7 +4,7 @@ from __future__ import annotations
 # Board / rendering
 # -----------------------------
 GRID_SIZE = 25
-TILE_SIZE = 20
+TILE_SIZE = 30
 HUD_WIDTH = 420
 SCREEN_WIDTH = GRID_SIZE * TILE_SIZE + HUD_WIDTH
 SCREEN_HEIGHT = GRID_SIZE * TILE_SIZE
@@ -46,7 +46,7 @@ PICKUP_SPAWN_COUNT = 2
 # Hazard system
 # -----------------------------
 STORM_START_TURNS = 8  # global turn count
-STORM_FIRST_SHRINK_SECONDS = 300  # 5 minutes
+STORM_FIRST_SHRINK_SECONDS = 60  # 1 minute
 STORM_SUBSEQUENT_SHRINK_SECONDS = 60  # 1 minute
 SAFE_ZONE_SHRINK_INTERVAL = 2
 SAFE_ZONE_SHRINK_AMOUNT = 2

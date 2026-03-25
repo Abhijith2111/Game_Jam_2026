@@ -71,7 +71,8 @@ class UI:
         ratio = max(0.0, min(1.0, ratio))
 
         track_rect = pygame.Rect(x, y, w, h)
-        pygame.draw.rect(self.screen, (20, 20, 25), track_rect, border_radius=2)
+        border_radius = max(1, min(10, h // 5))
+        pygame.draw.rect(self.screen, (20, 20, 25), track_rect, border_radius=border_radius)
 
         if ratio <= 0:
             return
@@ -82,7 +83,7 @@ class UI:
         r = int(255 * (1.0 - ratio))
         g = int(255 * ratio)
         b = 70
-        pygame.draw.rect(self.screen, (r, g, b), fill_rect, border_radius=2)
+        pygame.draw.rect(self.screen, (r, g, b), fill_rect, border_radius=border_radius)
 
     def grid_to_px(self, x: int, y: int) -> Tuple[int, int]:
         return x * TILE_SIZE, y * TILE_SIZE
@@ -144,10 +145,16 @@ class UI:
         in_action_targets: Sequence[Ship] = (),
         in_action_friendly_targets: Sequence[Ship] = (),
     ) -> None:
+        # When `TILE_SIZE` is scaled (e.g. 10x), a lot of the ship art/padding used
+        # to rely on hard-coded pixel offsets. This scale factor keeps those
+        # offsets proportional.
+        scale = max(1, TILE_SIZE // 20)
+
         # Valid destination squares for movement selection
         for (x, y, dist) in valid_destinations:
             px, py = self.grid_to_px(x, y)
-            rect = pygame.Rect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2)
+            pad = 1 * scale
+            rect = pygame.Rect(px + pad, py + pad, TILE_SIZE - 2 * pad, TILE_SIZE - 2 * pad)
             if movement_max_steps is not None and dist == movement_max_steps:
                 pygame.draw.rect(self.screen, (255, 220, 60), rect, 3)
             elif dist == 0:
@@ -158,12 +165,14 @@ class UI:
         # Action target highlights
         for t in in_action_targets:
             px, py = self.grid_to_px(t.x, t.y)
-            rect = pygame.Rect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2)
+            pad = 1 * scale
+            rect = pygame.Rect(px + pad, py + pad, TILE_SIZE - 2 * pad, TILE_SIZE - 2 * pad)
             pygame.draw.rect(self.screen, (255, 80, 80), rect, 3)
 
         for t in in_action_friendly_targets:
             px, py = self.grid_to_px(t.x, t.y)
-            rect = pygame.Rect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2)
+            pad = 1 * scale
+            rect = pygame.Rect(px + pad, py + pad, TILE_SIZE - 2 * pad, TILE_SIZE - 2 * pad)
             pygame.draw.rect(self.screen, (80, 255, 150), rect, 3)
 
         # Ships
@@ -172,19 +181,26 @@ class UI:
                 continue
             color = PLAYER_COLORS.get(s.owner_id, COLOR_PLAYER0)
             px, py = self.grid_to_px(s.x, s.y)
-            rect = pygame.Rect(px + 2, py + 2, TILE_SIZE - 4, TILE_SIZE - 4)
+            ship_pad = 2 * scale
+            rect = pygame.Rect(px + ship_pad, py + ship_pad, TILE_SIZE - 2 * ship_pad, TILE_SIZE - 2 * ship_pad)
 
             cx = px + TILE_SIZE // 2
             cy = py + TILE_SIZE // 2
 
             # Galaga-style procedural art (no sprite assets).
             if s.ship_type == "healer":
+                edge = 3 * scale
+                core_top = 5 * scale
+                core_span = 10 * scale
+                ant_w = 2 * scale
+                ant_h = 5 * scale
+
                 # Diamond hull
                 points = [
-                    (cx, py + 3),
-                    (px + TILE_SIZE - 3, cy),
-                    (cx, py + TILE_SIZE - 3),
-                    (px + 3, cy),
+                    (cx, py + edge),
+                    (px + TILE_SIZE - edge, cy),
+                    (cx, py + TILE_SIZE - edge),
+                    (px + edge, cy),
                 ]
                 pygame.draw.polygon(self.screen, color, points)
                 # Cross core
@@ -192,52 +208,75 @@ class UI:
                 pygame.draw.rect(
                     self.screen,
                     (255, 255, 255),
-                    (cx - arm_w // 2, py + 5, arm_w, TILE_SIZE - 10),
+                    (cx - arm_w // 2, py + core_top, arm_w, TILE_SIZE - core_span),
                 )
                 pygame.draw.rect(
                     self.screen,
                     (255, 255, 255),
-                    (px + 5, cy - arm_w // 2, TILE_SIZE - 10, arm_w),
+                    (px + core_top, cy - arm_w // 2, TILE_SIZE - core_span, arm_w),
                 )
                 # Antenna
-                pygame.draw.rect(self.screen, (255, 255, 255), (cx - 1, py + 0, 2, 5))
-                pygame.draw.circle(self.screen, (255, 240, 180), (cx, py + 1), 2)
+                pygame.draw.rect(
+                    self.screen,
+                    (255, 255, 255),
+                    (cx - (ant_w // 2), py, ant_w, ant_h),
+                )
+                pygame.draw.circle(self.screen, (255, 240, 180), (cx, py + scale), 2 * scale)
             elif s.ship_type == "tank":
+                base_pad_x = 4 * scale
+                base_pad_y = 9 * scale
+                base_w_pad = 8 * scale
+                base_h_pad = 7 * scale
+
+                turret_x = 3 * scale
+                turret_y = 3 * scale
+                turret_sz = 6 * scale
+
                 # Bulky hull + turret
-                base = pygame.Rect(px + 4, py + 9, TILE_SIZE - 8, TILE_SIZE - 7)
+                base = pygame.Rect(px + base_pad_x, py + base_pad_y, TILE_SIZE - base_w_pad, TILE_SIZE - base_h_pad)
                 pygame.draw.rect(self.screen, color, base, border_radius=3)
-                turret = pygame.Rect(cx - 3, py + 3, 6, 6)
+                turret = pygame.Rect(cx - turret_x, py + turret_y, turret_sz, turret_sz)
                 pygame.draw.rect(self.screen, color, turret, border_radius=2)
                 # Barrel
-                pygame.draw.line(self.screen, (255, 255, 255), (cx, py + 9), (cx, py + 13), 2)
+                barrel_w = max(1, 2 * scale)
+                pygame.draw.line(self.screen, (255, 255, 255), (cx, py + base_pad_y), (cx, py + 13 * scale), barrel_w)
                 # Windows
-                pygame.draw.circle(self.screen, (255, 255, 255), (cx - 4, cy + 3), 2)
-                pygame.draw.circle(self.screen, (255, 255, 255), (cx + 4, cy + 3), 2)
+                pygame.draw.circle(self.screen, (255, 255, 255), (cx - 4 * scale, cy + 3 * scale), 2 * scale)
+                pygame.draw.circle(self.screen, (255, 255, 255), (cx + 4 * scale, cy + 3 * scale), 2 * scale)
             else:
+                edge = 3 * scale
+                tip_pad = 4 * scale
+                wing_x_pad = 2 * scale
+                wing_y_pad = 9 * scale
+                wing_w = 5 * scale
+                wing_h = 3 * scale
+
                 # Fighter triangle
                 pts = [
-                    (cx, py + 3),
-                    (px + 3, py + TILE_SIZE - 4),
-                    (px + TILE_SIZE - 4, py + TILE_SIZE - 4),
+                    (cx, py + edge),
+                    (px + edge, py + TILE_SIZE - tip_pad),
+                    (px + TILE_SIZE - tip_pad, py + TILE_SIZE - tip_pad),
                 ]
                 pygame.draw.polygon(self.screen, color, pts)
                 # Wings
                 pygame.draw.rect(
-                    self.screen, (255, 255, 255), (px + 2, py + TILE_SIZE - 9, 5, 3)
+                    self.screen, (255, 255, 255), (px + wing_x_pad, py + TILE_SIZE - wing_y_pad, wing_w, wing_h)
                 )
                 pygame.draw.rect(
-                    self.screen, (255, 255, 255), (px + TILE_SIZE - 7, py + TILE_SIZE - 9, 5, 3)
+                    self.screen, (255, 255, 255), (px + TILE_SIZE - 7 * scale, py + TILE_SIZE - wing_y_pad, wing_w, wing_h)
                 )
                 # Engine glow
-                pygame.draw.circle(self.screen, (255, 240, 180), (cx, py + TILE_SIZE - 6), 2)
+                pygame.draw.circle(
+                    self.screen, (255, 240, 180), (cx, py + TILE_SIZE - 6 * scale), 2 * scale
+                )
 
             # Health bar above the ship (color-coded; no numeric text).
-            bar_w = TILE_SIZE - 4
-            bar_h = max(3, TILE_SIZE // 10)
+            bar_pad_x = 4 * scale
+            bar_h = max(3 * scale, TILE_SIZE // 10)
             self._draw_health_bar(
-                x=px + 2,
-                y=py + 1,
-                w=bar_w,
+                x=px + 2 * scale,
+                y=py + 1 * scale,
+                w=TILE_SIZE - bar_pad_x,
                 h=bar_h,
                 hp=s.hp,
                 max_hp=s.max_hp,
@@ -245,12 +284,13 @@ class UI:
 
             is_selected = s.id in set(selected_ship_ids)
             if is_selected and (active_ship_id is None or s.id != active_ship_id):
-                pygame.draw.rect(self.screen, (150, 100, 255), rect, 2, border_radius=3)
+                pygame.draw.rect(self.screen, (150, 100, 255), rect, max(1, 2 * scale), border_radius=3)
 
             if active_ship_id is not None and s.id == active_ship_id:
-                pygame.draw.rect(self.screen, (255, 220, 60), rect, 2)
+                pygame.draw.rect(self.screen, (255, 220, 60), rect, max(1, 2 * scale))
 
     def draw_pickups(self, pickups: Sequence[object], *, active: bool = True) -> None:
+        scale = max(1, TILE_SIZE // 20)
         # pickups are `Pickup` models; we draw active ones.
         for p in pickups:
             if not getattr(p, "active", False):
@@ -258,14 +298,23 @@ class UI:
             px, py = self.grid_to_px(p.x, p.y)
             cx = px + TILE_SIZE // 2
             cy = py + TILE_SIZE // 2
-            glow_r = max(3, TILE_SIZE // 3)
+            glow_r = max(3 * scale, TILE_SIZE // 3)
             pygame.draw.circle(self.screen, (*COLOR_PICKUP,), (cx, cy), glow_r)
             # Medkit cross
-            arm = max(2, TILE_SIZE // 6)
-            pygame.draw.rect(self.screen, (255, 255, 255), (cx - arm // 2, cy - glow_r + 2, arm, glow_r * 2 - 4))
-            pygame.draw.rect(self.screen, (255, 255, 255), (cx - glow_r + 2, cy - arm // 2, glow_r * 2 - 4, arm))
+            arm = max(2 * scale, TILE_SIZE // 6)
+            pad = 2 * scale
+            pygame.draw.rect(
+                self.screen,
+                (255, 255, 255),
+                (cx - arm // 2, cy - glow_r + pad, arm, glow_r * 2 - 2 * pad),
+            )
+            pygame.draw.rect(
+                self.screen,
+                (255, 255, 255),
+                (cx - glow_r + pad, cy - arm // 2, glow_r * 2 - 2 * pad, arm),
+            )
             # Outer border
-            pygame.draw.circle(self.screen, COLOR_PICKUP, (cx, cy), glow_r, 2)
+            pygame.draw.circle(self.screen, COLOR_PICKUP, (cx, cy), glow_r, max(1, 2 * scale))
 
     def _draw_dice_icon(self, value: int, x: int, y: int, size: int = 46) -> None:
         # Simple procedural “dice image” for the HUD.
@@ -308,13 +357,14 @@ class UI:
         pygame.draw.rect(self.screen, (10, 10, 14), hud, 0)
         pygame.draw.line(self.screen, COLOR_GRID, (hud_x, 0), (hud_x, hud.height), 2)
 
-        title = "Space Grid TBS"
+        title = "Galactic Warfare Survival"
         self.screen.blit(self.font.render(title, True, COLOR_TEXT), (hud_x + 14, 14))
 
         owner_label = "Player (You)" if turn_owner_id == 0 else f"AI {turn_owner_id}"
         self.screen.blit(self.small_font.render(f"Turn: {owner_label}", True, COLOR_TEXT), (hud_x + 14, 42))
         self.screen.blit(self.small_font.render(f"Move up to: {dice_roll}", True, COLOR_TEXT), (hud_x + 14, 68))
-        self._draw_dice_icon(dice_roll, hud_x + HUD_WIDTH - 70, 58, size=52)
+        dice_size = max(34, min(52, int(TILE_SIZE * 1.5)))
+        self._draw_dice_icon(dice_roll, hud_x + HUD_WIDTH - 70, 58, size=dice_size)
 
         self.screen.blit(self.small_font.render(f"Phase: {current_phase}", True, COLOR_TEXT), (hud_x + 14, 94))
 

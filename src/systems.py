@@ -344,7 +344,7 @@ class HazardSystem:
         Time-based shrinking:
         - Safe zone stays full-size until the storm becomes active by `global_turn_index >= STORM_START_TURNS`.
         - After storm is active:
-          - at t >= 5 minutes: shrink once
+          - at t >= 1 minute: shrink once
           - then every 1 minute: shrink again
         """
         if global_turn_index < STORM_START_TURNS:

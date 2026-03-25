@@ -44,6 +44,7 @@ from src.ui import UI
 
 
 PHASE_MENU = "menu"
+PHASE_EXPLAIN = "explain"
 PHASE_SELECT_SHIP = "select_ship"
 PHASE_SELECT_DEST = "select_destination"
 PHASE_ACTION = "action_choice"
@@ -59,7 +60,7 @@ class PendingHumanAction:
 class Game:
     def __init__(self) -> None:
         pygame.init()
-        pygame.display.set_caption("Space Grid TBS (Galaga-style TBS)")
+        pygame.display.set_caption("Galactic Warfare Survival")
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
         self.ui = UI(self.screen)
@@ -482,13 +483,19 @@ class Game:
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_1:
                             self.num_opponents = 1
-                            self.reset_game()
+                            self.state = PHASE_EXPLAIN
                         elif event.key == pygame.K_2:
                             self.num_opponents = 2
-                            self.reset_game()
+                            self.state = PHASE_EXPLAIN
                         elif event.key == pygame.K_3:
                             self.num_opponents = 3
+                            self.state = PHASE_EXPLAIN
+                elif self.state == PHASE_EXPLAIN:
+                    if event.type == pygame.KEYDOWN:
+                        if event.key in (pygame.K_SPACE, pygame.K_RETURN):
                             self.reset_game()
+                        elif event.key == pygame.K_ESCAPE:
+                            self.state = PHASE_MENU
                 elif self.state == "playing":
                     if self.active_owner_id == 0:
                         self._handle_human_input(event)
@@ -513,7 +520,7 @@ class Game:
         if self.state == PHASE_MENU:
             self.screen.fill((7, 10, 20))
             title_font = pygame.font.SysFont(None, 38)
-            title = "Space Grid TBS"
+            title = "Galactic Warfare Survival"
             self.screen.blit(title_font.render(title, True, (230, 235, 255)), (60, 60))
 
             desc_font = pygame.font.SysFont(None, 28)
@@ -526,6 +533,62 @@ class Game:
             self.screen.blit(desc_font.render("Press 3: 3 AI", True, (220, 230, 255)), (60, y + 60))
             self.screen.blit(desc_font.render("Movement: click ship then click destination tile.", True, (220, 230, 255)), (60, y + 120))
             self.screen.blit(desc_font.render("Action: click an enemy to attack or a friend to heal (healers only).", True, (220, 230, 255)), (60, y + 150))
+            return
+
+        if self.state == PHASE_EXPLAIN:
+            self.screen.fill((7, 10, 20))
+
+            # Keep this page readable but compact enough to fit on
+            # smaller laptop resolutions (e.g. 1366x768).
+            title_font = pygame.font.SysFont(None, 38)
+            text_font = pygame.font.SysFont(None, 20)
+            small_font = pygame.font.SysFont(None, 16)
+
+            title = "How to Play"
+            self.screen.blit(title_font.render(title, True, (230, 235, 255)), (60, 50))
+
+            lines: List[str] = [
+                "Goal: Be the last owner with ships remaining.",
+                "",
+                "Turn + Movement:",
+                "- Roll a dice each turn.",
+                "- Choose ONE of your ships.",
+                "- Move it up to the dice roll (straight-line movement).",
+                "",
+                "Selecting & Actions:",
+                "- Click your ship.",
+                "- Click a highlighted tile to move.",
+                "- Then click an enemy to ATTACK (within 3-tile Chebyshev range).",
+                "- Healers can HEAL friendly ships (within 3-tile Chebyshev range).",
+                "- Healer healing has a cooldown; you can still attack with other ships.",
+                "",
+                "Pickups:",
+                "- Step onto medkits to gain healing.",
+                "- Collected medkits respawn after 5 global turns.",
+                "",
+                "Storm / Safe Zone:",
+                "- The safe zone shrinks over time after the storm starts.",
+                "- Ships outside the safe zone take damage at end of turn.",
+                "",
+                "Controls:",
+                "- Click ship: select ship",
+                "- Click tile: move",
+                "- Click target: attack/heal",
+                "- Space / Enter: start game (here) or end turn (during play)",
+                "- Esc: back to menu",
+            ]
+
+            y = 80
+            line_h = 24
+            for line in lines:
+                if line == "":
+                    y += 8
+                    continue
+                self.screen.blit(text_font.render(line, True, (220, 230, 255)), (60, y))
+                y += line_h
+
+            small = small_font.render("Press Space/Enter to begin. Press Esc to return.", True, (230, 235, 255))
+            self.screen.blit(small, (60, SCREEN_HEIGHT - 40))
             return
 
         # playing / game over
