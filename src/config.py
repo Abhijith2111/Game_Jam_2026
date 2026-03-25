@@ -24,9 +24,9 @@ SHIP_TANK = "tank"
 SHIP_NORMAL = "normal"
 
 SHIP_STATS = {
-    SHIP_HEALER: {"max_hp": 70, "damage": 1},
-    SHIP_TANK: {"max_hp": 120, "damage": 5},
-    SHIP_NORMAL: {"max_hp": 80, "damage": 3},
+    SHIP_HEALER: {"max_hp": 60, "damage": 11},
+    SHIP_TANK: {"max_hp": 110, "damage": 15},
+    SHIP_NORMAL: {"max_hp": 70, "damage": 13},
 }
 
 HEAL_RANGE = 3
