@@ -65,6 +65,25 @@ class UI:
             pygame.draw.circle(blob, (*col, 40), (radius, radius), radius)
             self.star_bg.blit(blob, (cx - radius, cy - radius))
 
+    def _draw_health_bar(self, *, x: int, y: int, w: int, h: int, hp: int, max_hp: int) -> None:
+        # Color-coded HP bar (green -> red).
+        ratio = 0.0 if max_hp <= 0 else hp / max_hp
+        ratio = max(0.0, min(1.0, ratio))
+
+        track_rect = pygame.Rect(x, y, w, h)
+        pygame.draw.rect(self.screen, (20, 20, 25), track_rect, border_radius=2)
+
+        if ratio <= 0:
+            return
+
+        fill_w = max(1, int(w * ratio))
+        fill_rect = pygame.Rect(x, y, fill_w, h)
+
+        r = int(255 * (1.0 - ratio))
+        g = int(255 * ratio)
+        b = 70
+        pygame.draw.rect(self.screen, (r, g, b), fill_rect, border_radius=2)
+
     def grid_to_px(self, x: int, y: int) -> Tuple[int, int]:
         return x * TILE_SIZE, y * TILE_SIZE
 
@@ -211,6 +230,18 @@ class UI:
                 )
                 # Engine glow
                 pygame.draw.circle(self.screen, (255, 240, 180), (cx, py + TILE_SIZE - 6), 2)
+
+            # Health bar above the ship (color-coded; no numeric text).
+            bar_w = TILE_SIZE - 4
+            bar_h = max(3, TILE_SIZE // 10)
+            self._draw_health_bar(
+                x=px + 2,
+                y=py + 1,
+                w=bar_w,
+                h=bar_h,
+                hp=s.hp,
+                max_hp=s.max_hp,
+            )
 
             is_selected = s.id in set(selected_ship_ids)
             if is_selected and (active_ship_id is None or s.id != active_ship_id):
