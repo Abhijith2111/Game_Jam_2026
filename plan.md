@@ -77,3 +77,12 @@ flowchart TD
 ### AI Tools Used
 - Development assistance was guided with AI support in `Cursor IDE` and `ChatGPT/OpenAI` for planning and implementation help.
 
+### Reflection on AI Use
+The AI excelled at turning my prompts into a functioning MVP quickly—especially in scaffolding the 2D top-down, turn-based structure, wiring up the core loop, and iterating until the game became playable.
+
+At the same time, it limited my scope in a helpful way: it steered the project toward a simpler 2D approach to reduce complexity and avoid overloading the AI with requirements that were too large for the timeframe.
+
+It also changed my creative/technical process by taking on a lot of the execution work (writing and updating code, handling integration steps, and pushing updates to GitHub), so my role shifted more toward reviewing, guiding, and validating behavior.
+
+I was transparent about my use of AI throughout the game jam process, and I credited the AI tools as part of the development workflow.
+
