@@ -14,6 +14,7 @@ from src.config import (
     COLOR_STORM_OVERLAY,
     COLOR_TEXT,
     COLOR_PLAYER0,
+    HEAL_AMOUNT,
     HUD_WIDTH,
     GRID_SIZE,
     TILE_SIZE,
@@ -404,6 +405,23 @@ class UI:
                 (hud_x + 14, y),
             )
             y += 20
+
+            self.screen.blit(
+                self.small_font.render(f"Damage: {active_ship.damage}", True, COLOR_TEXT),
+                (hud_x + 14, y),
+            )
+            y += 20
+            self.screen.blit(
+                self.small_font.render(f"Max HP: {active_ship.max_hp}", True, COLOR_TEXT),
+                (hud_x + 14, y),
+            )
+            y += 20
+            if active_ship.ship_type == "healer":
+                self.screen.blit(
+                    self.small_font.render(f"Heal: {HEAL_AMOUNT}", True, COLOR_TEXT),
+                    (hud_x + 14, y),
+                )
+                y += 20
 
             if healing_cooldown_for_active is not None:
                 self.screen.blit(
