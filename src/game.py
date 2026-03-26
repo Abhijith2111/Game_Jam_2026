@@ -521,7 +521,7 @@ class Game:
 
     def _render(self) -> None:
         if self.state == PHASE_MENU:
-            self.screen.fill((7, 10, 20))
+            self.ui.draw_space_background_fullscreen(SCREEN_WIDTH, SCREEN_HEIGHT)
             title_font = pygame.font.SysFont(None, 38)
             title = "Galactic Warfare Survival"
             self.screen.blit(title_font.render(title, True, (230, 235, 255)), (60, 60))
@@ -539,7 +539,7 @@ class Game:
             return
 
         if self.state == PHASE_EXPLAIN:
-            self.screen.fill((7, 10, 20))
+            self.ui.draw_space_background_fullscreen(SCREEN_WIDTH, SCREEN_HEIGHT)
 
             # Keep this page readable but compact enough to fit on
             # smaller laptop resolutions (e.g. 1366x768).

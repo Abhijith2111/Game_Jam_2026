@@ -75,6 +75,17 @@ class UI:
             pygame.draw.circle(blob, (*col, 40), (radius, radius), radius)
             self.star_bg.blit(blob, (cx - radius, cy - radius))
 
+    def draw_space_background_fullscreen(self, screen_width: int, screen_height: int) -> None:
+        # Tile the prebuilt starfield to cover the entire window.
+        for y in range(0, screen_height, self.grid_px):
+            for x in range(0, screen_width, self.grid_px):
+                self.screen.blit(self.star_bg, (x, y))
+
+        # Subtle dark overlay for menu text readability.
+        overlay = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 35))
+        self.screen.blit(overlay, (0, 0))
+
     def _draw_health_bar(self, *, x: int, y: int, w: int, h: int, hp: int, max_hp: int) -> None:
         # Color-coded HP bar (green -> red).
         ratio = 0.0 if max_hp <= 0 else hp / max_hp
